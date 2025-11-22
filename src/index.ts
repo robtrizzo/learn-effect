@@ -1,37 +1,19 @@
-import { Data, Effect } from "effect";
+import { Config, Data, Effect, Schema } from "effect";
+import { PokeApi, PokeApiLive } from "./PokeApi.js";
 
-interface FetchError {
-    readonly _tag: "FetchError";
-}
-class FetchError extends Data.TaggedError("FetchError")<{}> { }
+const program = Effect.gen(function* () {
+    const pokeApi = yield* PokeApi
+    return yield* pokeApi.getPokemon
+})
 
+const runnable = program.pipe(Effect.provideService(PokeApi, PokeApiLive))
 
-interface JsonError {
-    readonly _tag: "JsonError"
-}
-class JsonError extends Data.TaggedError("JsonError")<{}> { }
-
-
-const fetchRequest = Effect.tryPromise({
-    try: () => fetch("https://pokeapi.co/api/v2/pokemon/garchomp/"),
-    catch: () => new FetchError()
-});
-
-const jsonResponse = (response: Response) => Effect.tryPromise({
-    try: () => response.json(),
-    catch: () => new JsonError()
-});
-
-const main = fetchRequest.pipe(
-    Effect.filterOrFail(
-        (response) => response.ok,
-        () => new FetchError()
-    ),
-    Effect.flatMap(jsonResponse),
+const main = runnable.pipe(
     Effect.catchTags({
         FetchError: () => Effect.succeed("Fetch error"),
         JsonError: () => Effect.succeed("Json error"),
+        ParseError: () => Effect.succeed("Parse error"),
     })
 )
 
-Effect.runPromise(main);
+Effect.runPromise(main).then(console.log);
